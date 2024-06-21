@@ -29,14 +29,14 @@ const userSchema = new mongoose.Schema({
         required: true,
     },
     coverImage: {
-        type: String,  //storing cloudinary URL
-        watchHistory : [ // storing IDs of videos watchted,
-            {
-                type: mongoose.Schema.Types.ObjectId,
-                ref: "Video"
-            }
-        ]
+        type: String, // cloudinary url
     },
+    watchHistory: [
+        {
+            type: mongoose.Schema.Types.ObjectId,  // storing IDs of videos watched
+            ref: "Video"
+        }
+    ],
     password: {
         type: String,
         required: [true, 'Password is required']
@@ -50,7 +50,7 @@ const userSchema = new mongoose.Schema({
 // .pre()  --> do this right before event of save db. We also have .post for after event.
 // DO NOT use arrow functions () => {} as we cant use 'this' keyword to get current context. So use function () {} in the callback. Also make it async as it takes time to execute.
 
-userSchema.pre("save", async function () {
+userSchema.pre("save", async function (next) {
     
     // Only encrypt password if the password is changed. So if user changes avatar or anything other than password, don't encrypt password.
     if(!this.isModified("password")) return next();
