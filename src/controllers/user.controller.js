@@ -1,9 +1,76 @@
 import { asyncHandler } from "../utils/asyncHandler.js"
+import { ApiError } from "../utils/ApiError.js"
+import { User } from "../models/user.model.js"
+import {uploadOnCloudinary} from "../utils/cloudinary.js"
+import { ApiResponse } from "../utils/ApiResponse.js"
 
 const registerUser =  asyncHandler( async (req,res) => {
-    res.status(200).json({
-        message: "ok"
+
+    // get user details from frontend 
+    // validation(to see if provided data is valid i.e. not empty, in proper format, etc)
+    // check if user already exists: check by username, email
+    // check if avatar(required) and images
+    // upload them on cloudinary, avatar
+    // create user object - create entry in db
+    // remove password and refresh token field from response 
+    // check for user creation 
+    // return response
+
+    const { fullName,email,username,password } = req.body // if data is coming from form or json, it is in req.body
+    console.log("email:" ,email);
+    console.log(req.body);
+
+    if( 
+        [fullName, email,username,password].some((field) => field?.trim() ==="")
+    ) {
+        throw new ApiError(400, "All fields are required")
+    }
+
+    const existedUser = User.findOne({
+        $or: [{ username }, { email }]
     })
+    
+    if(existedUser) {
+        throw new ApiError(409, "User with email or username already exists")
+    }
+
+    const avatarLocalPath = req.files?.avatar[0]?.path
+    const coverImageLocalPath = req.files?.coverImage[0]?.path
+
+    if(!avatarLocalPath) {
+        throw new ApiError(400,"Avatar file is required")
+    }
+
+    const avatar = await uploadOnCloudinary(avatarLocalPath)
+    const coverImage = await uploadOnCloudinary(coverImageLocalPath)
+
+    if(!avatar) {
+        throw new ApiError(400,"Avatar file is required")
+    }
+
+    const user = await User.create({
+        fullName,
+        avatar: avatar.url,  // only keep the url in db 
+        coverImage: coverImage?.url || "",
+        email, 
+        password,
+        username: username.toLowerCase()
+    })
+
+    // With every entry in db, mongodb adds a "_id" field automatically
+
+    const createdUser = await User.findById(user._id).select(  // by default all fields are selected, so to remove some fields we use this .select method, in string write with "-...remove.. -..remove.."
+        "-password -refreshToken"
+    )
+
+    if(!createdUser) {
+        throw new ApiError(500, "Something went wrong while registering the user")
+    }
+
+    return res.status(201).json(
+        new ApiResponse(200, createdUser, "User registered successfully")
+    )
+
 })
 
-export {registerUser}
+export { registerUser }
