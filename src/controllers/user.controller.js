@@ -3,7 +3,8 @@ import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
-import { response } from "express";
+import mongoose from "mongoose";
+import jwt from "jsonwebtoken"
 
 const generateAccessAndRefreshTokens = async (userId) => {
   try {
@@ -168,8 +169,8 @@ const logoutUser = asyncHandler(async (req, res) => {
   await User.findByIdAndUpdate(
     req.user._id,
     {
-      $set: {
-        refreshToken: undefined,
+      $unset: {
+        refreshToken: 1,
       },
     },
     {
@@ -374,23 +375,40 @@ const getUserChannelProfile = asyncHandler(async(req,res) => {
         as: "subscribedTo"
       },
     },
+    // {
+    //   $addFields: {
+    //     subscribersCount: {
+    //       $size: "$subscribers"
+    //     },
+    //     channelsSubscribedToCount: {
+    //       $size: "subscribedTo"
+    //     },
+    //     isSubscribed: {
+    //       $condition: {
+    //         if: {$in: [req.user?._id, "$subscribers"]},
+    //         then: true,
+    //         else: false
+    //       }
+    //     }
+    //   }
+    // },
     {
       $addFields: {
-        subscribersCount: {
-          $size: "$subscribers"
-        },
-        channelsSubscribedToCount: {
-          $size: "subscribedTo"
-        },
-        isSubscribed: {
-          $condition: {
-            if: {$in: [req.user?._id, "$subscribers"]},
-            then: true,
-            else: false
+          subscribersCount: {
+              $size: "$subscribers"
+          },
+          channelsSubscribedToCount: {
+              $size: "$subscribedTo"
+          },
+          isSubscribed: {
+              $cond: {
+                  if: {$in: [req.user?._id, "$subscribers.subscriber"]},
+                  then: true,
+                  else: false
+              }
           }
-        }
       }
-    },
+  },
     {
       $project: {  // Just like in SQL, to show the necessary result, leaving out some fields
         fullName: 1, // 1 means show, project, display
@@ -421,7 +439,7 @@ const getWatchHistory = asyncHandler(async (req, res) => {
   const user = await User.aggregate([
     {
       $match: {
-        _id: new mongoose.Types.objectId(req.user._id),
+        _id: new mongoose.Types.ObjectId(req.user._id),
       },
     },
     {
