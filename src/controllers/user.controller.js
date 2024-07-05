@@ -259,7 +259,7 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
 const getCurrentUser = asyncHandler(async (req, res) => {
   return res
     .status(200)
-    .json(200, req.user, "Current user fetched successfully");
+    .json(new ApiResponse(200, req.user, "Current user fetched successfully"));
 });
 
 const updateAccountDetails = asyncHandler(async (req, res) => {
@@ -343,6 +343,80 @@ const updateCover = asyncHandler(async (req, res) => {
 
 });
 
+const getUserChannelProfile = asyncHandler(async(req,res) => {
+  const {username} = req.params // getting from url
+
+  if(!username?.trim()) {
+    throw new ApiError(400, " username is missing")
+  }
+
+  const channel = await User.aggregate([
+    {
+      $match: { // returns document which matches the username, so we have only 1 result now
+        username: username?.toLowerCase()
+      },
+    },
+    {
+      // counting number of subscribers of channel
+      $lookup: {
+        from: "subscriptions",  // In subscription.model, we have kept name as "Subscription" but in mongodb, always this is changed to subscriptions i.e lowercase 1st letter and make it plural, add 's' at the end, so we are searching "subscriptions" instead of "Subscription"
+        localField: "_id",
+        foreignField: "channel",
+        as: "subscribers"
+      },
+    },
+    {
+      // counting number of channels subscribed to
+      $lookup: {
+        from: "subscriptions", 
+        localField: "_id",
+        foreignField: "subscribers",
+        as: "subscribedTo"
+      },
+    },
+    {
+      $addFields: {
+        subscribersCount: {
+          $size: "$subscribers"
+        },
+        channelsSubscribedToCount: {
+          $size: "subscribedTo"
+        },
+        isSubscribed: {
+          $condition: {
+            if: {$in: [req.user?._id, "$subscribers"]},
+            then: true,
+            else: false
+          }
+        }
+      }
+    },
+    {
+      $project: {  // Just like in SQL, to show the necessary result, leaving out some fields
+        fullName: 1, // 1 means show, project, display
+        username: 1,
+        subscribersCount: 1,
+        channelsSubscribedToCount: 1,
+        isSubscribed: 1,
+        avatar: 1,
+        coverImage: 1,
+        email: 1,
+      }
+    }
+  ])
+
+  if(!channel?.length) {
+    throw new ApiError(404, "channel does not exist")
+  }
+
+  return res
+  .status(200)
+  .json(
+    new ApiResponse(200, channel[0], "User channel fetched successfully")
+  )
+
+})
+
 export {
   registerUser,
   loginUser,
@@ -352,5 +426,6 @@ export {
   getCurrentUser,
   updateAccountDetails,
   updateAvatar,
-  updateCover
+  updateCover,
+  getUserChannelProfile
 };
